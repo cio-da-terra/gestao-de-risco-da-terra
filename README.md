@@ -12,9 +12,87 @@ series, and a futures market to compare against. The current fetchers
 therefore focus on coffee; other crops are added by extending the product
 lists and price sources.
 
-This README covers the **data ingestion** layer: the code that fetches
-public data on a schedule and stores it so models can be trained and
-backtested honestly.
+This README covers the project timeline and the **data ingestion** layer:
+the code that fetches public data on a schedule and stores it so models can
+be trained and backtested honestly.
+
+## Timeline
+
+The plan has 6 phases of roughly one week each. The final deadline is not set
+yet, so weeks are relative. Status as of **2026-11-01**: phase 1 is mostly
+done and **phase 2 (data) is in progress**.
+
+| # | Phase | Status |
+|---|---|---|
+| 1 | Definition: challenge statement, roles, first crop, repo | mostly done |
+| 2 | Data: ingestion, storage, knowledge base | **in progress** |
+| 3 | Models: yield and price, calibrated uncertainty | not started |
+| 4 | Agents: protection simulator and knowledge agent | not started |
+| 5 | Integration: orchestrator, interface, MVP flow | not started |
+| 6 | Tests, ethics review, pitch and rehearsal | not started |
+
+### 1. Definition
+
+- [x] Challenge statement and essential question ("ampliar, não substituir")
+- [x] First target crop: coffee (arábica and conilon)
+- [x] Repository, ingestion skeleton, glossary
+- [ ] Pick the study municipalities (replace the examples in `LOCATIONS`)
+- [ ] Define the environmental scope: which climate risks and which
+      sustainable adaptation practices the tool covers
+- [ ] Set the final deadline and turn these phases into dates
+
+### 2. Data
+
+- [x] Point-in-time SQLite store with raw snapshots
+- [x] Fetchers: BCB (PTAX, Selic, IPCA), NASA POWER, NOAA ONI, IBGE PAM,
+      World Bank Pink Sheet
+- [x] GitHub Actions workflow and DVC remote (disabled stub)
+- [ ] Conab production costs (needed for break-even)
+- [ ] Conab producer prices (local price / basis)
+- [ ] CEPEA: download sample files and test the parser; confirm licensing
+- [ ] Update the Pink Sheet URL to the current edition
+- [ ] CHIRPS rainfall and ERA5 temperature, aggregated per municipality
+- [ ] ZARC planting windows for the chosen municipalities
+- [ ] Decide on storage (Google Drive security concern), then enable the
+      scheduled runs
+- [ ] Knowledge base documents for the RAG: MCR (Pronaf, Proagro), CPR law,
+      PNAE/PAA rules, Garantia-Safra, PGPM, ZARC, plus sources on
+      sustainable adaptation practices; each with version and date
+
+### 3. Models
+
+- [ ] Features: GDD/EDD (heat), rainfall by crop stage, ENSO, FX
+- [ ] Yield model: quantile LightGBM per municipality, against a trend baseline
+- [ ] Price model: small neural network (MLP or LSTM) against a seasonal
+      baseline. This covers the challenge's "simple neural network" constraint
+- [ ] Calibrated intervals: CQR, with adaptive conformal (ACI) over time
+- [ ] Backtests with `db.as_of()`, reporting coverage, MAPE and RMSE
+- [ ] Track runs in MLflow, pointing to the DVC data version
+
+### 4. Agents
+
+- [ ] Protection agent: simulate income under each strategy (spot sale,
+      PNAE/PAA, cooperative, CPR, insurance/Proagro, diversification)
+      and report break-even and the probability of falling below it
+- [ ] Knowledge agent: RAG over the programme documents, with citations and
+      a check that answers come from the retrieved text
+- [ ] Eligibility checks (CAF, Pronaf tier, ZARC window)
+
+### 5. Integration
+
+- [ ] Orchestrator (LLM) that coordinates the agents and explains results
+      in plain language, never recommending a trade
+- [ ] Referral path to ATER/Emater or a cooperative for out-of-scope cases
+- [ ] Web interface with the full demo flow for one crop and one region
+
+### 6. Tests and pitch
+
+- [ ] Unit tests for agents and fetchers; model evaluation in CI
+- [ ] Ethics review: uncertainty shown everywhere, no individual advice
+      (CVM), no personal data stored (LGPD)
+- [ ] Pitch script: problem (income and climate risk), solution, live demo,
+      ethics, essential question
+- [ ] Rehearsal
 
 ## Quick start
 
