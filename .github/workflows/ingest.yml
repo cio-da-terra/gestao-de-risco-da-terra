@@ -1,0 +1,104 @@
+# Scheduled data ingestion. A STUB: scheduled runs are skipped until it's enabled.
+#
+# Turn it on (see docs/ingest-setup.md for details):
+#   1. Put the Google Drive folder id in .dvc/config (replace REPLACE_WITH_DRIVE_FOLDER_ID).
+#   2. Add the repo secret GDRIVE_CREDENTIALS_DATA = the service-account JSON.
+#   3. Test once: Actions -> ingest -> Run workflow (manual runs ignore the switch).
+#   4. Add the repo variable INGEST_ENABLED = true. Scheduled runs start from then on.
+# Turn it off again: delete INGEST_ENABLED or set it to anything else.
+
+name: ingest
+
+on:
+  schedule:
+    # UTC. Odd minutes avoid the top-of-hour rush, when GitHub delays cron runs most.
+    - cron: "17 23 * * 1-5"   # daily, 20:17 Brasília, after PTAX and CEPEA close
+    - cron: "37 12 5 * *"     # monthly, day 5: Pink Sheet, IPCA and ONI are out
+  workflow_dispatch:
+    inputs:
+      cadence:
+        description: "Which jobs to run (each also runs the shorter cadences)"
+        type: choice
+        options: [daily, monthly, yearly]
+        default: daily
+      only:
+        description: "Optional: space-separated sources, e.g. 'bcb oni'"
+        type: string
+        default: ""
+
+permissions:
+  contents: write   # the job commits the updated data.dvc pointer
+
+concurrency:
+  group: ingest     # never two runs writing the database at once
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    if: github.event_name == 'workflow_dispatch' || vars.INGEST_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GDRIVE_CREDENTIALS_DATA: ${{ secrets.GDRIVE_CREDENTIALS_DATA }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt "dvc[gdrive]==3.67.1"
+
+      - name: Check setup
+        run: |
+          if grep -q REPLACE_WITH_DRIVE_FOLDER_ID .dvc/config; then
+            echo "::error::Set the Google Drive folder id in .dvc/config first"; exit 1
+          fi
+          if [ -z "$GDRIVE_CREDENTIALS_DATA" ]; then
+            echo "::error::Secret GDRIVE_CREDENTIALS_DATA is not set"; exit 1
+          fi
+
+      - name: Pick cadence
+        id: cadence
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            c="${{ inputs.cadence }}"
+          elif [ "${{ github.event.schedule }}" = "37 12 5 * *" ]; then
+            c=monthly
+          else
+            c=daily
+          fi
+          echo "value=$c" >> "$GITHUB_OUTPUT"
+
+      - name: Pull previous data
+        # The first run has no data.dvc yet and starts from an empty database.
+        run: if [ -f data.dvc ]; then dvc pull data.dvc; fi
+
+      - name: Ingest
+        id: ingest
+        # Keep going on failure so the sources that did succeed are still saved;
+        # the last step turns the run red.
+        continue-on-error: true
+        run: |
+          only="${{ inputs.only }}"
+          python -m ingest "${{ steps.cadence.outputs.value }}" ${only:+--only $only}
+
+      - name: Save data
+        run: |
+          dvc add data
+          dvc push
+          git config user.name "ingest-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data.dvc .gitignore
+          if git diff --cached --quiet; then echo "No data changes"; exit 0; fi
+          git commit -m "data: ${{ steps.cadence.outputs.value }} ingest $(date -u +%F)"
+          git pull --rebase
+          git push
+
+      - name: Fail if any source failed
+        if: steps.ingest.outcome == 'failure'
+        run: |
+          echo "::error::At least one source failed; see the Ingest step log (also in fetch_log)."
+          exit 1

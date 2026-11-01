@@ -1,0 +1,6 @@
+[core]
+    analytics = false
+    remote = gdrive
+['remote "gdrive"']
+    url = gdrive://REPLACE_WITH_DRIVE_FOLDER_ID
+    gdrive_use_service_account = true
