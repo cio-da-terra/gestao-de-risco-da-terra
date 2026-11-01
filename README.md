@@ -258,12 +258,37 @@ DVC; git only holds the `data.dvc` pointer. **It is off by default.**
 - [Prototype of AI-Integrated Chatbot for Shallot Price Forecasting and
   Advisory Support to Assist Farmer Decision Making](https://journal.ipb.ac.id/jtep/article/view/69862).
   *Jurnal Keteknikan Pertanian* (IPB). Authors and year still to confirm.
+- Stracqualursi, L. (2026). [Forecasting Crop Yield Anomalies on Panel Data
+  via Spatially Demeaned Ensembles](https://doi.org/10.1007/s13253-026-00743-8).
+  *Journal of Agricultural, Biological and Environmental Statistics*. Open
+  access (CC BY 4.0). Main methodological reference for yield: forecasts
+  anomalies after removing each region's fixed level (municipality fixed
+  effects, in PAM terms), with a light RF/XGBoost/SVR ensemble and split
+  conformal intervals. Country-level global panel (1990–2013), not
+  municipalities.
+- de Freitas, C. H., Coelho, R. D., Costa, J. O. & Sentelhas, P. C. (2025).
+  [Equationing Arabica coffee: Adaptation, calibration, and application of an
+  agrometeorological model for yield estimation](https://doi.org/10.1016/j.agsy.2024.104181).
+  *Agricultural Systems* 223, 104181. Domain reference for arábica in
+  Brazil: process-based baseline and which climate variables matter at each
+  crop stage.
+- Quantile regression forest for corn yield across 1,260 Chinese counties,
+  1984–2019. *International Food and Agribusiness Management Review* 28(2),
+  2025. [doi:10.22434/ifamr1134](https://doi.org/10.22434/ifamr1134). The
+  closest setup to ours: a sub-national panel with probabilistic intervals.
+  Authors still to confirm.
+- Farag, M., Emam, A., Leonhardt, J. & Roscher, R. (2025). Enhancing decision
+  support in crop production: Analyzing conformal prediction for uncertainty
+  quantification. *Computers and Electronics in Agriculture* 237, 110559.
+  [doi:10.1016/j.compag.2025.110559](https://doi.org/10.1016/j.compag.2025.110559).
+  Conformal prediction in agriculture in a strong venue; probably not yield
+  forecasting, so check the abstract before citing.
 - Namdeo, D. & Baraskar, R. (2026). Climate-Adaptive Transformer for Crop
   Yield Prediction with Conformal Uncertainty Quantification. *IJERT*
-  15(04), IJERTV15IS040092. An example of the crop-stage climate features +
-  conformal + ACI pipeline. Use with care: low-rigour venue, inconsistent
+  15(04), IJERTV15IS040092. Same pipeline idea (crop-stage climate features +
+  conformal + ACI), cited only as an example: low-rigour venue, inconsistent
   dataset counts, and its satellite features are proxies derived from climate
-  data.
+  data. Prefer the two references above.
 
 ### Context: farmer wellbeing and risk in Brazil
 
@@ -289,5 +314,5 @@ These support the motivation, not the method.
 
 - The meta-analysis behind the 0.06 SMD effect of price-information
   interventions (cited in the project glossary without a source).
-- A recent, well-published paper on uncertainty-aware crop yield
-  forecasting, to pair with or replace Namdeo & Baraskar.
+- Abstracts and full text of de Freitas et al. (2025) and Farag et al.
+  (2025): only their metadata has been checked so far.
