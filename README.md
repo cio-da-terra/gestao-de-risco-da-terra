@@ -223,3 +223,71 @@ DVC; git only holds the `data.dvc` pointer. **It is off by default.**
   and should be settled before scheduled runs are turned on.
 - SIDRA variable and category ids are looked up by name from the table
   metadata; BCB series codes are hard-coded in `bcb.py`.
+
+## References
+
+### Methods
+
+- Gibbs, I. & Candès, E. (2021). Adaptive conformal inference under
+  distribution shift. *NeurIPS* 34. [arXiv:2106.00170](https://arxiv.org/abs/2106.00170).
+  The basis for keeping interval coverage valid as climate and prices shift.
+- Romano, Y., Patterson, E. & Candès, E. (2019). Conformalized quantile
+  regression. *NeurIPS* 32. [arXiv:1905.03222](https://arxiv.org/abs/1905.03222).
+- Angelopoulos, A. N. & Bates, S. (2021). A gentle introduction to conformal
+  prediction and distribution-free uncertainty quantification.
+  [arXiv:2107.07511](https://arxiv.org/abs/2107.07511).
+- Chernozhukov, V. et al. (2018). Double/debiased machine learning for
+  treatment and structural parameters. *The Econometrics Journal* 21(1),
+  C1–C68. [doi:10.1111/ectj.12097](https://doi.org/10.1111/ectj.12097).
+- Wager, S. & Athey, S. (2018). Estimation and inference of heterogeneous
+  treatment effects using random forests. *JASA* 113(523), 1228–1242.
+  [doi:10.1080/01621459.2017.1319839](https://doi.org/10.1080/01621459.2017.1319839).
+
+### Applications
+
+- Odion, D. et al. (2025). [Towards improving farmers livelihood in Nigeria
+  using food price forecasting](https://www.research-collection.ethz.ch/entities/publication/166363fb-ddab-4df1-9d7e-a3109666acdb).
+  *Journal of Agriculture and Food Research* 24, 102365. Main resource for
+  the challenge's "resource from the last 2 years" requirement.
+- Zhao, C. et al. (2025). [A Vegetable-Price Forecasting Method Based on
+  Mixture of Experts](https://doaj.org/article/f8126c607ff5463586fb461e3522bac1).
+  *Agriculture* 15(2), 162.
+- Runyiri, J. (2025). [A Predictive model for hedging futures contracts to
+  stabilize Kenyan coffee farmers' income](https://su-plus.strathmore.edu/items/78ca6dd5-17d3-4583-a579-36b146128803).
+  Dissertation, Strathmore University.
+- [Prototype of AI-Integrated Chatbot for Shallot Price Forecasting and
+  Advisory Support to Assist Farmer Decision Making](https://journal.ipb.ac.id/jtep/article/view/69862).
+  *Jurnal Keteknikan Pertanian* (IPB). Authors and year still to confirm.
+- Namdeo, D. & Baraskar, R. (2026). Climate-Adaptive Transformer for Crop
+  Yield Prediction with Conformal Uncertainty Quantification. *IJERT*
+  15(04), IJERTV15IS040092. An example of the crop-stage climate features +
+  conformal + ACI pipeline. Use with care: low-rigour venue, inconsistent
+  dataset counts, and its satellite features are proxies derived from climate
+  data.
+
+### Context: farmer wellbeing and risk in Brazil
+
+These support the motivation, not the method.
+
+- Lameiras, M. M. (2025). [The cost of stress: How financial planning could
+  save lives on farms](https://fieldreport.caes.uga.edu/news/financial-planning-relieves-farm-stress/).
+  *CAES Field Report*, University of Georgia, 18 Dec 2025. Reports a survey of
+  310 US farmers by A. Scheyett et al.: disaster assistance and government
+  programmes were rated the most helpful topics for reducing stress. The
+  survey measured perceived helpfulness, not a reduction in stress.
+- Norco & Black Dog Institute (2026). [2026 Norco National Farmer Wellbeing
+  Report](https://drive.google.com/file/d/1wzMNIvjTvrTnIjXAX0QRdJBcdsGZyFy_/view).
+  Survey of 1,017 Australian producers, Oct 2025 – Mar 2026. Industry
+  survey, not peer-reviewed.
+- Nichi, J. (2026). [Comida cara: o que o recorde da safra não
+  mostra?](https://outraspalavras.net/crise-brasileira/comida-cara-o-que-o-recorde-da-safra-nao-mostra/)
+  *Outras Palavras*, 14 Aug 2026. Insurance gap (subsidised cover under 3% of
+  planted area in 2026/27) and the limits of credit-only policy for family
+  farmers. For its numbers, cite Conab, IBGE and MAPA directly.
+
+### Still to find
+
+- The meta-analysis behind the 0.06 SMD effect of price-information
+  interventions (cited in the project glossary without a source).
+- A recent, well-published paper on uncertainty-aware crop yield
+  forecasting, to pair with or replace Namdeo & Baraskar.
