@@ -90,12 +90,18 @@ def _fit_trend(known: pd.DataFrame):
     return lambda d: lr.predict(design(d))
 
 
-def backtest(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
-    """Out-of-sample predictions (log scale) for every model and forecast year."""
+def backtest(df: pd.DataFrame, models: list[str] | None = None, lag: int = 2,
+             features: list[str] | None = None) -> tuple[pd.DataFrame, pd.Series]:
+    """Out-of-sample predictions (log scale) for every model and forecast year.
+
+    lag: latest PAM year known at forecast time is Y - lag (2 = realistic,
+    1 = the leaky setup used in experiment 5). features: subset for ablations.
+    """
+    features = features or FEATURES
     out = []
     ridge_coefs = None
     for Y in range(BACKTEST_START, df.year.max() + 1):
-        known = df[df.year <= Y - 2].copy()
+        known = df[df.year <= Y - lag].copy()
         test = df[df.year == Y].copy()
         if test.empty:
             continue
@@ -113,13 +119,15 @@ def backtest(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
         test["lag2_anom"] = lag2(test)
         base = trend(test)
         for name, model in make_models().items():
+            if models and name not in models:
+                continue
             if model is None:
                 pred = base
             else:
-                model.fit(known[FEATURES], known.anom)
-                pred = base + model.predict(test[FEATURES])
+                model.fit(known[features], known.anom)
+                pred = base + model.predict(test[features])
                 if name == "ridge" and Y == df.year.max():
-                    ridge_coefs = pd.Series(model[-1].coef_, index=FEATURES)
+                    ridge_coefs = pd.Series(model[-1].coef_, index=features)
             out.append(pd.DataFrame({"model": name, "code": test.code.values,
                                      "year": Y, "y": test.y.values, "pred_log": pred}))
     return pd.concat(out, ignore_index=True), ridge_coefs

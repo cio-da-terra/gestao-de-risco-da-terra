@@ -12,6 +12,7 @@ python3 -m venv .venv && .venv/bin/pip install -r poc/requirements.txt
 .venv/bin/python -m poc.fetch     # once: fills data/cio_da_terra.sqlite (~5 min)
 .venv/bin/python -m poc           # backtests + writes poc/results/
 .venv/bin/python -m poc --municipio Linhares --cost 25000
+.venv/bin/python -m poc.experiments   # assumption tests (~2 min)
 ```
 
 ## Setup
@@ -95,6 +96,39 @@ Full tables in [`results/summary.md`](results/summary.md).
 6. **The neural network meets the challenge requirement but loses** to
    simpler models on both tasks, as expected with about 400 yield rows.
 
+## Experiments: testing the main assumptions
+
+`python -m poc.experiments` checks seven assumptions the project relies on.
+Full tables and verdicts: [`results/experiments.md`](results/experiments.md).
+
+| # | Assumption | Test | Result |
+|---|---|---|---|
+| 1 | No natural hedge | ES yield anomaly vs robusta price change, harvest to harvest | **Supported.** r ≈ −0.16, p ≈ 0.4 |
+| 2 | Yield risk outweighs price risk | Out-of-sample error spread, revenue variance split | **Supported.** Yield ≈ 82% of variance |
+| 3 | Weather adds real skill | Shuffle weather across years (200×); drop one group at a time | **Marginal.** p ≈ 0.08; dropping ENSO hurts most, rain adds nothing yet |
+| 4 | Errors exchangeable across municipalities | Year share of error variance; per-year coverage vs binomial | **Not supported.** ~60% is a shared year shock; 6 of 14 years outside the range |
+| 5 | PAM lag matters | Train on ≤ Y-1 (leaky) vs ≤ Y-2 | **Supported.** Leaky looks ~0.5 sacas/ha better |
+| 6 | Weak biennial bearing | Anomaly autocorrelation at lags 1 and 2 | **Supported.** Lag-1 r ≈ 0.39, lag-2 ≈ 0.04: persistence, not alternation |
+| 7 | PAM yields informative | Repeated and whole-number values | **Concern.** ~13% of years repeat; ~45% are whole sacas/ha |
+
+![Natural hedge test](results/exp1_natural_hedge.png)
+
+![Coverage per year](results/exp4_coverage_by_year.png)
+
+What changes because of them:
+
+- **Product focus.** Experiments 1 and 2 back the choice to centre the tool on
+  yield protection (Proagro, insurance, Garantia-Safra) rather than price
+  hedging.
+- **Intervals.** Experiment 4 means "80%" is honest only on average across
+  years. The model needs a shared year-shock term, and the UI should not
+  present one municipality's interval as a guarantee for a given year.
+- **Features.** Experiment 3 says rain totals by stage are not enough yet:
+  next try water balance and irrigation. Experiment 6 says last year's
+  anomaly is the strongest signal, so fill PAM's gap with Conab/LSPA estimates.
+- **Honest reporting.** Experiment 5 shows why the backtest must keep the
+  publication lag, even though it makes the numbers worse.
+
 ## Limitations
 
 - **PAM municipal yields are coarse:** values are often repeated across years
@@ -112,7 +146,9 @@ Full tables in [`results/summary.md`](results/summary.md).
 - Water-balance features (ERA5 or CHIRPS + evapotranspiration) and a share of
   irrigated area per municipality.
 - A common "year shock" term (or a state-level in-season estimate from IBGE
-  LSPA / Conab) to handle the correlated errors behind the 2016 miss.
-- Use Conab or LSPA estimates for year Y-1 to close the two-year PAM gap.
+  LSPA / Conab) to handle the correlated errors behind the 2016 miss
+  (experiment 4).
+- Use Conab or LSPA estimates for year Y-1 to close the two-year PAM gap; the
+  lag-1 persistence (experiment 6) suggests this is the biggest easy gain.
 - CQR with quantile models, so intervals can be wider where the model is less sure.
 - CEPEA conilon prices and Conab costs, then re-run the break-even.
