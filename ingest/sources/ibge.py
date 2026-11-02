@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 
 from .. import db
@@ -29,6 +29,24 @@ PRODUCTS = {  # our short name -> substring of the c82 category name
     "cafe_arabica": "Café (em grão) Arábica",
     "cafe_canephora": "Café (em grão) Canephora",
 }
+
+
+# LSPA (Levantamento Sistemático da Produção Agrícola), table 6588: every month
+# IBGE re-estimates the current year, by state. Each monthly estimate is kept
+# as its own vintage, so a model can see exactly what was published by a date.
+LSPA_TABLE = 6588
+LSPA_PRODUCTS = {  # our short name -> substring of the c48 category name
+    "cafe_total": "Café total",
+    "cafe_arabica": "Café arábica",
+    "cafe_canephora": "Café canephora",
+}
+LSPA_VARIABLES = {  # LSPA names differ from PAM's ("Produção", not "Quantidade produzida")
+    "area_colhida": "Área colhida",
+    "producao": "Produção",
+    "rendimento": "Rendimento médio",
+}
+# Estimates for month M are released around the middle of month M+1.
+LSPA_RELEASE_DAY = 15
 
 
 def _norm(s: str) -> str:
@@ -63,6 +81,43 @@ def _category(table: int, label: str) -> tuple[int, int]:
             if _norm(label) in _norm(cat["nome"]):
                 return c["id"], cat["id"]
     raise KeyError(label)
+
+
+def fetch_lspa(con, ufs: list[int], products=("cafe_canephora", "cafe_arabica"),
+               variables=("rendimento", "producao")) -> int:
+    """State-level monthly estimates of the current year (yield, production).
+
+    Series: lspa:{product}:{variable}:{uf}, ref_date = Dec 31 of the estimated
+    year, one row per published revision with available_at = release date.
+    """
+    total = 0
+    ufs_s = ",".join(map(str, ufs))
+    for prod in products:
+        cls_id, cat_id = _category(LSPA_TABLE, LSPA_PRODUCTS[prod])
+        for var in variables:
+            var_id = _variable_id(LSPA_TABLE, LSPA_VARIABLES[var])
+            url = (f"https://apisidra.ibge.gov.br/values/t/{LSPA_TABLE}/n3/{ufs_s}"
+                   f"/v/{var_id}/p/all/c{cls_id}/{cat_id}")
+            payload = get(url, timeout=180)
+            snap = db.save_raw(con, "ibge_lspa", url, payload, ".json")
+            body = json.loads(payload)[1:]
+            rows: dict[str, list[db.Obs]] = {}
+            for r in body:
+                # D1C = UF code, D3C = period YYYYMM (order follows the URL)
+                uf, period, raw = r["D1C"], r["D3C"], r["V"]
+                if raw in ("-", "...", "X", ".."):
+                    continue
+                y, m = int(period[:4]), int(period[4:])
+                released = datetime(y + (m == 12), m % 12 + 1, LSPA_RELEASE_DAY, tzinfo=timezone.utc)
+                sid = f"lspa:{prod}:{var}:{uf}"
+                rows.setdefault(sid, []).append(db.Obs(sid, date(y, 12, 31), float(raw), released))
+            for sid, obs in rows.items():
+                unit = body[0].get("MN", "") if body else ""
+                db.register_series(con, sid, "ibge_lspa", f"LSPA {prod} {var} (monthly vintages)",
+                                   unit, "monthly vintages of a yearly value")
+                obs.sort(key=lambda o: o.available_at)   # vintages in release order
+                total += db.upsert_observations(con, obs, timedelta(0), snap)
+    return total
 
 
 def fetch_pam(con, municipios: list[int], products=("cafe_arabica", "cafe_canephora")) -> int:

@@ -68,6 +68,9 @@ def main():
         n = climate.fetch_nasa_power(con, f"mun{m['code']}", m["lat"], m["lon"],
                                      start=date(1990, 1, 1))
         print(f"POWER {m['name']}: {n}")
+    print("LSPA ...", ibge.fetch_lspa(con, [32],  # 32 = ES
+                                      products=("cafe_total", "cafe_arabica", "cafe_canephora"),
+                                      variables=("rendimento", "producao", "area_colhida")))
     print("ONI ...", climate.fetch_oni(con))
     print("BCB ...", bcb.fetch(con, start=date(1999, 1, 1)))
     print("Pink Sheet ...", prices.fetch_pink_sheet(con))

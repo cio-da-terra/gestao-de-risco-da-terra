@@ -34,10 +34,20 @@ def _pam(con):
     return ibge.fetch_pam(con, codes)
 
 
+UF_CODES = {"MG": 31, "ES": 32, "RO": 11, "SP": 35, "BA": 29, "PR": 41}
+
+
+def _lspa(con):
+    """IBGE monthly state estimates; fills PAM's publication gap."""
+    ufs = sorted({UF_CODES[l["uf"]] for l in LOCATIONS})
+    return ibge.fetch_lspa(con, ufs, products=("cafe_total", "cafe_arabica", "cafe_canephora"),
+                           variables=("rendimento", "producao", "area_colhida"))
+
+
 JOBS = {
     "daily": {"bcb": bcb.fetch, "power": _power},
     "monthly": {"oni": climate.fetch_oni, "pink_sheet": prices.fetch_pink_sheet,
-                "cepea_manual": prices.load_cepea_manual},
+                "cepea_manual": prices.load_cepea_manual, "lspa": _lspa},
     "yearly": {"pam": _pam},
 }
 CADENCE = ["daily", "monthly", "yearly"]  # a longer cadence also runs the shorter ones

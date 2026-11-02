@@ -49,6 +49,42 @@ def weather(con, muns: pd.DataFrame) -> pd.DataFrame:
                              "PRECTOTCORR": "rain"})
 
 
+def lspa_vintages(con, uf: int = 32) -> pd.DataFrame:
+    """Every published LSPA estimate for coffee in a state (default 32 = ES).
+
+    Columns: product, var, ref_year, available_at (UTC), value. Read from
+    `observation`, not `observation_latest`: the model must pick the vintage
+    that was public at its forecast date.
+    """
+    df = pd.read_sql("SELECT series_id, ref_date, available_at, value FROM observation "
+                     "WHERE series_id LIKE ?", con, params=(f"lspa:cafe_%:%:{uf}",))
+    parts = df.series_id.str.split(":")
+    df["product"], df["var"] = parts.str[1], parts.str[2]
+    df["ref_year"] = pd.to_datetime(df.ref_date).dt.year
+    df["available_at"] = pd.to_datetime(df.available_at, utc=True)
+    return df[["product", "var", "ref_year", "available_at", "value"]]
+
+
+def lspa_total_yield(vint: pd.DataFrame, cutoff: pd.Timestamp) -> pd.Series:
+    """Coffee-total yield (kg/ha) per year, as published before `cutoff`.
+
+    LSPA reports "café total" for ES only up to 2017 and arabica/canephora
+    separately from 2012, so later years are rebuilt the way PAM defines the
+    total: (arabica + canephora production) / (arabica + canephora area).
+    """
+    known = vint[vint.available_at < cutoff].sort_values("available_at")
+    last = known.groupby(["product", "var", "ref_year"]).value.last().unstack(["product", "var"])
+
+    def col(p, v):
+        return last[(p, v)] if (p, v) in last.columns else pd.Series(np.nan, index=last.index)
+
+    total = col("cafe_total", "rendimento")
+    prod = col("cafe_arabica", "producao").fillna(0) + col("cafe_canephora", "producao")
+    area = col("cafe_arabica", "area_colhida").fillna(0) + col("cafe_canephora", "area_colhida")
+    rebuilt = prod * 1000 / area      # production in tonnes, area in ha -> kg/ha
+    return total.fillna(rebuilt).dropna()
+
+
 def oni(con) -> pd.Series:
     df = _series(con, "noaa:oni")
     return df.set_index("ref_date")["value"].sort_index()

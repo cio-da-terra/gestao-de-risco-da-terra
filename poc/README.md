@@ -22,6 +22,7 @@ python3 -m venv .venv && .venv/bin/pip install -r poc/requirements.txt
 | Crop and region | Conilon, 18 municipalities in northern Espírito Santo (`config.py`) |
 | Yield data | IBGE PAM "café total" yield, 2002–2025 (mostly conilon there) |
 | Weather | NASA POWER daily rain and temperature at each municipality's centroid |
+| State estimates | IBGE LSPA monthly estimates for ES coffee, each vintage at its release date |
 | Price | World Bank Pink Sheet robusta (USD/kg) × 60 × monthly PTAX → R$/saca |
 | Forecast moment | End of February of harvest year Y (after flowering) |
 | Intervals | Online split conformal + adaptive conformal inference (ACI), 80% |
@@ -31,10 +32,19 @@ of Y, so a February forecast trains on years ≤ Y-2 and calibrates on errors
 from years ≤ Y-2. Price models only learn from forecasts whose outcome month
 has passed. This makes the scores worse than an in-sample fit, and honest.
 
+**Filling the PAM gap with LSPA.** IBGE re-estimates each year every month
+at state level. The database keeps every vintage with its release date, and
+the model uses only those out before 1 March: the December estimate for Y-1
+(mid-January) and IBGE's first estimate for Y (mid-February). LSPA reports
+ES "café total" only up to 2017, so later years are rebuilt from arabica +
+canephora production and area; the rebuilt series matches the published one
+exactly for 2012–2016.
+
 **Yield model.** log yield = municipality level + common linear trend
 (clonal varieties, irrigation) + anomaly. The anomaly is modelled from rain
-by crop stage, heat during grain filling, ENSO and the anomaly two years
-before (clipped). Models: trend only, ridge, gradient boosting, small MLP.
+by crop stage, heat during grain filling, ENSO, the anomaly two years before
+(clipped) and the two LSPA state anomalies. Models: trend only, ridge,
+gradient boosting, small MLP.
 
 **Price model.** 6-month-ahead log change from the last 12 monthly returns,
 season and ENSO. Models: random walk, ridge, small MLP.
@@ -53,9 +63,14 @@ Full tables in [`results/summary.md`](results/summary.md).
 | Model | MAE (sacas/ha) | Coverage of 80% interval (ACI) | Mean width (sacas/ha) |
 |---|---|---|---|
 | Trend only | 9.1 | 77.8% | 36.7 |
-| Ridge | **8.8** | 77.4% | 31.8 |
-| Gradient boosting | 9.1 | 76.6% | 31.4 |
-| MLP (neural net) | 9.7 | 82.5% | 39.6 |
+| Ridge | 8.9 | 77.4% | 32.7 |
+| Gradient boosting | **8.5** | 80.6% | 32.2 |
+| MLP (neural net) | 9.1 | 77.4% | 35.5 |
+
+Without the LSPA features, gradient boosting had 9.1 and ridge 8.8: LSPA
+helps the tree model, mostly in recent years (2025: 14.7 → 6.9 sacas/ha),
+and not in the 2016 drought, which IBGE's own February estimate also missed
+(29 sacas/ha first estimate, about 18 final).
 
 ![Yield backtest, Jaguaré](results/yield_backtest.png)
 
@@ -75,10 +90,10 @@ Full tables in [`results/summary.md`](results/summary.md).
 
 ## What we learned
 
-1. **Weather adds little to the yield forecast so far.** Ridge beats the
-   trend baseline by only 0.3 sacas/ha. The signs make sense (El Niño and
-   heat lower yield, rain at flowering raises it), but February weather
-   explains a small part of the anomaly.
+1. **Weather and state estimates add a modest, real gain.** The best model
+   beats the trend baseline by about 0.6 sacas/ha, and shuffling the weather
+   makes it worse in 98% of runs (experiment 3). ENSO carries most of it;
+   IBGE's January estimate helps gradient boosting.
 2. **The 2015–2017 drought is the failure case.** Nothing like it was in the
    training years, and it hit every municipality at once: coverage in 2016 was
    0–17%. Errors are correlated across municipalities within a year, so 80%
@@ -90,11 +105,12 @@ Full tables in [`results/summary.md`](results/summary.md).
    barely changes the chance of not covering costs. That supports focusing
    the tool on yield protection (Proagro, insurance, Garantia-Safra) over
    price hedging, consistent with the "no natural hedge" argument.
-5. **The break-even signal is not yet reliable.** For Jaguaré it gave 13–24%
-   in the 2013–2017 loss years and 80% in 2019, a good year. The yield model
+5. **The break-even signal is not yet reliable.** For Jaguaré it gave 7–22%
+   in the 2013–2017 loss years and 74% in 2019, a good year. The yield model
    is the weak link.
-6. **The neural network meets the challenge requirement but loses** to
-   simpler models on both tasks, as expected with about 400 yield rows.
+6. **The neural network meets the challenge requirement but doesn't win.**
+   It needs a strong penalty to stay stable (alpha = 10; with 0.1 its MAE
+   was 17) and then ties ridge on yield; on price it trails the random walk.
 
 ## Experiments: testing the main assumptions
 
@@ -105,9 +121,9 @@ Full tables and verdicts: [`results/experiments.md`](results/experiments.md).
 |---|---|---|---|
 | 1 | No natural hedge | ES yield anomaly vs robusta price change, harvest to harvest | **Supported.** r ≈ −0.16, p ≈ 0.4 |
 | 2 | Yield risk outweighs price risk | Out-of-sample error spread, revenue variance split | **Supported.** Yield ≈ 82% of variance |
-| 3 | Weather adds real skill | Shuffle weather across years (200×); drop one group at a time | **Marginal.** p ≈ 0.08; dropping ENSO hurts most, rain adds nothing yet |
-| 4 | Errors exchangeable across municipalities | Year share of error variance; per-year coverage vs binomial | **Not supported.** ~60% is a shared year shock; 6 of 14 years outside the range |
-| 5 | PAM lag matters | Train on ≤ Y-1 (leaky) vs ≤ Y-2 | **Supported.** Leaky looks ~0.5 sacas/ha better |
+| 3 | Weather adds real skill | Shuffle weather across years (200×); drop one group at a time | **Supported.** p ≈ 0.03; ENSO matters most (+1.0 sc/ha if dropped), rain +0.2 |
+| 4 | Errors exchangeable across municipalities | Year share of error variance; per-year coverage vs binomial | **Not supported.** ~62% is a shared year shock; 5 of 14 years outside the range |
+| 5 | PAM lag matters | Train on ≤ Y-1 (leaky) vs ≤ Y-2 | **Supported.** Leaky looks ~0.4 sacas/ha better |
 | 6 | Weak biennial bearing | Anomaly autocorrelation at lags 1 and 2 | **Supported.** Lag-1 r ≈ 0.39, lag-2 ≈ 0.04: persistence, not alternation |
 | 7 | PAM yields informative | Repeated and whole-number values | **Concern.** ~13% of years repeat; ~45% are whole sacas/ha |
 
@@ -123,9 +139,11 @@ What changes because of them:
 - **Intervals.** Experiment 4 means "80%" is honest only on average across
   years. The model needs a shared year-shock term, and the UI should not
   present one municipality's interval as a guarantee for a given year.
-- **Features.** Experiment 3 says rain totals by stage are not enough yet:
-  next try water balance and irrigation. Experiment 6 says last year's
-  anomaly is the strongest signal, so fill PAM's gap with Conab/LSPA estimates.
+- **Features.** Experiment 3 says the climate signal is real but mostly
+  ENSO: next try water balance and irrigation. Experiment 6 pointed to last
+  year's anomaly; it now comes from IBGE LSPA. In ridge the LSPA features
+  barely move the error (−0.03 sacas/ha), and of the two, IBGE's first
+  estimate for Y carries the weight, not the Y-1 estimate.
 - **Honest reporting.** Experiment 5 shows why the backtest must keep the
   publication lag, even though it makes the numbers worse.
 
@@ -148,7 +166,9 @@ What changes because of them:
 - A common "year shock" term (or a state-level in-season estimate from IBGE
   LSPA / Conab) to handle the correlated errors behind the 2016 miss
   (experiment 4).
-- Use Conab or LSPA estimates for year Y-1 to close the two-year PAM gap; the
-  lag-1 persistence (experiment 6) suggests this is the biggest easy gain.
+- Add Conab's coffee surveys (January and May) next to LSPA: an independent
+  estimate of the same harvest, conilon-specific for ES. Done for LSPA.
+- Municipal LSPA-style signals don't exist; a state shock term is the
+  closest. Try LSPA for MG/RO when the PoC extends to other regions.
 - CQR with quantile models, so intervals can be wider where the model is less sure.
 - CEPEA conilon prices and Conab costs, then re-run the break-even.

@@ -31,6 +31,7 @@ GROUPS = {
     "heat": ["tmax_fill", "hot_fill"],
     "ENSO": ["oni"],
     "biennial lag": ["lag2_anom"],
+    "LSPA (state estimates)": ["lspa_prev", "lspa_cur"],
 }
 
 
@@ -244,8 +245,9 @@ def exp6_biennial(anom):
     else:
         verdict = (f"**Supported: biennial bearing is weak.** Lag-1 r = {r1:.2f}, lag-2 r = {r2:.2f}. "
                    "Anomalies persist rather than alternate (droughts last more than a year). "
-                   "That persistence is useful, but PAM for Y-1 is not published by February: "
-                   "Conab or IBGE LSPA estimates for Y-1 could supply it. Part of it may also come "
+                   "PAM for Y-1 is not published by February, so the model takes this signal from "
+                   "IBGE LSPA instead (state estimates for Y-1 and the first estimate for Y; see the "
+                   "LSPA row of experiment 3's ablation). Part of the persistence may also come "
                    "from PAM values repeated year to year (experiment 7).")
     return t, verdict
 
@@ -270,7 +272,8 @@ def main():
     OUT.mkdir(exist_ok=True)
     con = data.connect()
     muns = data.municipios(con)
-    feats = ym.build_features(data.yields(con, muns), data.weather(con, muns), data.oni(con))
+    feats = ym.build_features(data.yields(con, muns), data.weather(con, muns), data.oni(con),
+                              data.lspa_vintages(con))
     anom = anomalies_all_years(feats)
 
     price_brl = data.price_brl_saca(con)

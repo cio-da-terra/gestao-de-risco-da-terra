@@ -48,6 +48,9 @@ phase 3.
 - [x] Point-in-time SQLite store with raw snapshots
 - [x] Fetchers: BCB (PTAX, Selic, IPCA), NASA POWER, NOAA ONI, IBGE PAM,
       World Bank Pink Sheet
+- [x] IBGE LSPA monthly state estimates, stored as dated vintages, to fill
+      PAM's publication gap
+- [ ] Conab coffee surveys (independent harvest estimates, conilon for ES)
 - [x] GitHub Actions workflow and DVC remote (disabled stub)
 - [ ] Conab production costs (needed for break-even)
 - [ ] Conab producer prices (local price / basis)
@@ -120,9 +123,9 @@ What the experiments say about the project's assumptions:
 |---|---|
 | No natural hedge: a bad local harvest doesn't raise the price | Supported (r ≈ −0.16, not significant) |
 | Yield risk outweighs price risk | Supported: yield is ~80% of revenue variance |
-| Weather adds real skill to the yield forecast | Not yet: marginal (permutation p ≈ 0.08); ENSO carries most of it |
-| Errors are exchangeable across municipalities | Not supported: ~60% of the error is a shared year shock |
-| Respecting PAM's publication lag matters | Supported: ignoring it flatters MAE by ~0.5 sacas/ha |
+| Weather adds real skill to the yield forecast | Supported (permutation p ≈ 0.03); ENSO carries most of it |
+| Errors are exchangeable across municipalities | Not supported: ~62% of the error is a shared year shock |
+| Respecting PAM's publication lag matters | Supported: ignoring it flatters MAE by ~0.4 sacas/ha |
 | Biennial bearing is weak for conilon | Supported: anomalies persist (lag-1 r ≈ 0.39) instead of alternating |
 | PAM municipal yields are informative | Concern: ~13% of years repeat the previous value |
 
@@ -168,7 +171,7 @@ re-exported when it changes.
 ```bash
 pip install -r requirements.txt        # only openpyxl, for Excel sources
 python -m ingest daily                 # BCB + NASA POWER
-python -m ingest monthly               # + ONI, Pink Sheet, IPCA, CEPEA files
+python -m ingest monthly               # + ONI, Pink Sheet, IPCA, CEPEA files, LSPA
 python -m ingest yearly --only pam     # IBGE PAM yield
 ```
 
@@ -186,6 +189,7 @@ fetch only what is new.
 | World Bank Pink Sheet | arabica and robusta prices, USD/kg | monthly | `sources/prices.py` | working, URL needs updating (see below) |
 | CEPEA/ESALQ | arábica and conilon indicators, BRL/saca | daily | `sources/prices.py` | parser for manual files, untested |
 | IBGE PAM (SIDRA 1613) | coffee area, production, yield per municipality | yearly | `sources/ibge.py` | working |
+| IBGE LSPA (SIDRA 6588) | state estimates of the current year's coffee area, production, yield; every monthly revision kept as a vintage | monthly | `sources/ibge.py` | working |
 | CHIRPS, ERA5 | gridded rain and temperature | daily | `sources/climate.py` | stub |
 | Conab | producer prices, production costs | monthly / yearly | `sources/prices.py` | stub |
 
@@ -216,6 +220,10 @@ Rules:
   `available_at = min(fetched_at, ref_date + publication lag)`. The lag is
   set per source, e.g. PAM for year Y counts as known around September of
   Y+1, not the day it was downloaded.
+- **Dated vintages keep their own dates.** When a source publishes
+  revisions on a schedule (IBGE LSPA re-estimates each year monthly), each
+  `db.Obs` carries its release date as `available_at`, and every vintage is
+  stored. `as_of()` then returns the estimate that was public on any day.
 - **Unchanged values are skipped**, so reruns are safe and add nothing.
 
 Tables and views:

@@ -25,8 +25,11 @@ from sklearn.preprocessing import StandardScaler
 from . import config
 from .conformal import ACI, conformal_quantile
 
-FEATURES = ["rain_veg", "rain_flower", "rain_fill", "tmax_fill", "hot_fill", "oni", "lag2_anom"]
+FEATURES = ["rain_veg", "rain_flower", "rain_fill", "tmax_fill", "hot_fill", "oni", "lag2_anom",
+            "lspa_prev", "lspa_cur"]
 FEATURE_LABELS = {
+    "lspa_prev": "State yield anomaly Y-1, IBGE LSPA (Dec estimate)",
+    "lspa_cur": "State yield anomaly Y, IBGE LSPA first estimate (Jan)",
     "rain_veg": "Rain Mar–Jun (Y-1), branch growth",
     "rain_flower": "Rain Jul–Oct (Y-1), flowering",
     "rain_fill": "Rain Nov (Y-1)–Feb (Y), grain filling",
@@ -41,7 +44,38 @@ HOT_DAY = 34.0
 LAG_CLIP = 0.3          # log points
 
 
-def build_features(yld: pd.DataFrame, wx: pd.DataFrame, oni: pd.Series) -> pd.DataFrame:
+FORECAST_CUTOFF_MONTH = 3   # forecast made before 1 March of the harvest year
+LSPA_MIN_YEARS = 4
+
+
+def lspa_features(vint: pd.DataFrame, years) -> pd.DataFrame:
+    """State-level anomalies from IBGE LSPA, as published before the forecast date.
+
+    lspa_prev: the Dec estimate for Y-1 (out mid-Jan), filling PAM's two-year gap.
+    lspa_cur:  IBGE's first estimate for Y itself (Jan estimate, out mid-Feb).
+    Both are deviations from a log-linear trend fitted on years <= Y-2, using
+    the latest vintage of each year that was public at the cutoff.
+    """
+    from .data import lspa_total_yield
+
+    rows = []
+    for t in years:
+        cutoff = pd.Timestamp(year=t, month=FORECAST_CUTOFF_MONTH, day=1, tz="UTC")
+        ly = np.log(lspa_total_yield(vint, cutoff))
+        hist = ly[ly.index <= t - 2]
+        prev = cur = np.nan
+        if len(hist) >= LSPA_MIN_YEARS:
+            b = np.polyfit(hist.index.to_numpy(float), hist.to_numpy(), 1)
+            if t - 1 in ly.index:
+                prev = ly.loc[t - 1] - np.polyval(b, t - 1)
+            if t in ly.index:
+                cur = ly.loc[t] - np.polyval(b, t)
+        rows.append({"year": t, "lspa_prev": prev, "lspa_cur": cur})
+    return pd.DataFrame(rows)
+
+
+def build_features(yld: pd.DataFrame, wx: pd.DataFrame, oni: pd.Series,
+                   lspa: pd.DataFrame | None = None) -> pd.DataFrame:
     w = wx.copy()
     w["m"] = w.date.dt.month
     w["yr"] = w.date.dt.year
@@ -64,6 +98,11 @@ def build_features(yld: pd.DataFrame, wx: pd.DataFrame, oni: pd.Series) -> pd.Da
 
     df = yld.set_index(["code", "year"]).join([veg, flower, fill]).reset_index()
     df = df.merge(oni_y, left_on="year", right_index=True, how="left")
+    if lspa is not None:
+        df = df.merge(lspa_features(lspa, sorted(df.year.unique())), on="year", how="left")
+    # Missing (before LSPA has enough history, or no LSPA given) = neutral
+    for c in ("lspa_prev", "lspa_cur"):
+        df[c] = df.get(c, pd.Series(0.0, index=df.index)).fillna(0.0)
     return df.dropna(subset=["rain_veg", "rain_flower", "rain_fill", "oni"]).reset_index(drop=True)
 
 
@@ -73,8 +112,10 @@ def make_models() -> dict:
         "ridge": make_pipeline(StandardScaler(), Ridge(alpha=3.0)),
         "gbm": HistGradientBoostingRegressor(max_depth=3, learning_rate=0.05, max_iter=150,
                                              min_samples_leaf=15, random_state=0),
+        # Strong L2 penalty: with ~400 rows and the LSPA features at zero in the
+        # early years, a weakly regularised MLP extrapolates wildly (MAE ~17).
         "mlp": make_pipeline(StandardScaler(),
-                             MLPRegressor(hidden_layer_sizes=(16,), alpha=0.1,
+                             MLPRegressor(hidden_layer_sizes=(16,), alpha=10.0,
                                           max_iter=5000, random_state=0)),
     }
 

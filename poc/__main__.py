@@ -93,7 +93,8 @@ def main():
     code = int(muns.loc[muns.name == args.municipio, "code"].iloc[0])
 
     # Yield
-    feats = ym.build_features(data.yields(con, muns), data.weather(con, muns), data.oni(con))
+    feats = ym.build_features(data.yields(con, muns), data.weather(con, muns), data.oni(con),
+                              data.lspa_vintages(con))
     ypreds, coefs = ym.backtest(feats)
     yres = ym.add_intervals(ypreds)
     ysum = ym.summarise(yres)

@@ -75,6 +75,9 @@ class Obs:
     series_id: str
     ref_date: date
     value: float | None
+    # Set when the source publishes dated vintages (e.g. IBGE LSPA monthly
+    # estimates); otherwise upsert_observations estimates it.
+    available_at: datetime | None = None
 
 
 def now_utc() -> datetime:
@@ -130,6 +133,9 @@ def upsert_observations(
     fetched = now_utc()
     new = 0
     for r in rows:
+        if r.available_at is not None:
+            new += _upsert_vintage(con, r, fetched, snapshot_id)
+            continue
         prev = con.execute(
             """SELECT value FROM observation WHERE series_id=? AND ref_date=?
                ORDER BY available_at DESC LIMIT 1""",
@@ -150,6 +156,27 @@ def upsert_observations(
         new += 1
     con.commit()
     return new
+
+
+def _upsert_vintage(con, r: Obs, fetched: datetime, snapshot_id) -> int:
+    """Store a dated vintage, skipping it if already stored or unchanged
+    from the vintage just before it."""
+    when = r.available_at.isoformat()
+    exists = con.execute(
+        "SELECT 1 FROM observation WHERE series_id=? AND ref_date=? AND available_at=?",
+        (r.series_id, r.ref_date.isoformat(), when)).fetchone()
+    if exists:
+        return 0
+    prev = con.execute(
+        """SELECT value FROM observation WHERE series_id=? AND ref_date=? AND available_at<?
+           ORDER BY available_at DESC LIMIT 1""",
+        (r.series_id, r.ref_date.isoformat(), when)).fetchone()
+    if prev is not None and _same(prev[0], r.value):
+        return 0
+    con.execute("INSERT INTO observation VALUES (?,?,?,?,?,?)",
+                (r.series_id, r.ref_date.isoformat(), r.value, when,
+                 fetched.isoformat(), snapshot_id))
+    return 1
 
 
 def _same(a, b, tol=1e-9) -> bool:
