@@ -12,7 +12,8 @@ series, and a futures market to compare against. The current fetchers
 therefore focus on coffee; other crops are added by extending the product
 lists and price sources.
 
-This README covers the project timeline and the **data ingestion** layer:
+This README covers the project timeline, a tentative UI, and the **data
+ingestion** layer:
 the code that fetches public data on a schedule and stores it so models can
 be trained and backtested honestly.
 
@@ -93,6 +94,40 @@ done and **phase 2 (data) is in progress**.
 - [ ] Pitch script: problem (income and climate risk), solution, live demo,
       ethics, essential question
 - [ ] Rehearsal
+
+## UI (tentative)
+
+> **Draft, to be revised.** These are early sketches to discuss the flow,
+> not a final design. Values in brackets (`[data]`, `[00]%`, `[Município]`)
+> are placeholders, and "Safra Clara" is only a working name.
+
+Two audiences: the **farmer**, on a phone, and the **extension technician**
+(ATER/cooperative), on the web, who follows several farmers.
+
+**Farmer, phone**
+
+| 1 · Sua lavoura | 2 · Seu risco nesta safra | 3 · Proteções para você | 4 · Próximas decisões |
+|---|---|---|---|
+| <img src="docs/ui/1-lavoura.png" width="200" alt="Form with crop, municipality, planting window, area, cost per hectare, usual yield and CAF status"> | <img src="docs/ui/2-risco.png" width="200" alt="Break-even price per bag, yield range under this season's climate, and probability of the harvest-month price falling below break-even"> | <img src="docs/ui/3-protecoes.png" width="200" alt="Cards for Proagro Mais, Garantia-Safra, subsidised insurance and PGPM/PEPRO, each with eligibility status and next step"> | <img src="docs/ui/4-alertas.png" width="200" alt="Timeline of upcoming decisions: planting window, Proagro deadline, mid-season review, pre-harvest update"> |
+| Farm data, filled once (optionally with the technician) | Break-even, climate → yield range, price risk | Programmes and insurance, eligibility and next step | Alerts at decision points, by WhatsApp or SMS |
+
+**Extension technician, web**
+
+<img src="docs/ui/5-painel-tecnico.png" width="820" alt="Technician dashboard: counts of farmers at high climate risk, eligible but uncovered, without CAF and with deadlines; farmer list by priority; seasonal outlook and open programme windows">
+
+Points to revise:
+
+- **Coffee is perennial.** "Quando pretende plantar" and the ZARC planting
+  window fit annual crops (corn, beans); for coffee the inputs should be
+  things like plantation age, flowering and harvest dates.
+- **Environmental focus** is not visible yet beyond climate risk: no screen
+  covers sustainable adaptation practices.
+- **Price source for conilon.** The risk screen says the price risk comes
+  from the futures market; check which futures, if any, apply to conilon.
+- Screen 3 is taller than its 390×1000 frame in the sketch.
+
+The images are renders of the design canvas (HTML artboards) and must be
+re-exported when it changes.
 
 ## Quick start
 
