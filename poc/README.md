@@ -219,9 +219,59 @@ need **causal** answers. Planned questions, from easiest to hardest:
 Why weather first: conditional on place and season, weather is as good as
 random, so its effects are identifiable with this panel; insurance uptake is
 chosen by farmers and needs a more careful design. Experiment 4's year shock
-means errors must be clustered by year in any causal estimate. Planned
-library: `DoubleML` or `econml` (Chernozhukov et al., 2018; Wager & Athey,
+means errors must be clustered by year in any causal estimate. Double ML is
+implemented directly in the PoC (no extra library); `DoubleML` or `econml`
+can replace it for causal forests (Chernozhukov et al., 2018; Wager & Athey,
 2018 in the main README's references).
+
+### Step 1 done: heat during grain filling
+
+```bash
+.venv/bin/python -m poc.causal_heat     # ~30 s → results/causal_heat.md
+```
+
+**Design.** Treatment: days with Tmax ≥ 34 °C, Nov (Y-1)–Feb (Y). Outcome:
+log yield. Controls: municipality, common trend, rain in each crop stage,
+ENSO. Mean temperature (the treatment in another unit) and the LSPA estimates
+(which may already reflect the heat) are left out on purpose. Estimators:
+fixed-effects regression and double ML (gradient-boosting nuisances,
+cross-fitted by year, repeated 5×), both with errors clustered by year.
+
+| Specification | Effect per extra hot day | 95% IC |
+|---|---|---|
+| Fixed effects | −0.03% | [−0.49%, +0.43%] |
+| Double ML | 0.00% | [−0.68%, +0.69%] |
+| *No rain controls (confounded)* | *−0.31%* | *[−0.72%, +0.10%]* |
+
+![Heat dose–response](results/causal_heat_dose.png)
+
+**Result: no detectable effect of heat once drought is accounted for.**
+
+- **Most of heat's apparent harm is drought.** Without the rain controls the
+  estimate is 10× larger and negative; with them it is about zero. Rain in
+  grain filling itself is worth about +2.6% yield per 100 mm.
+- **The curve is flat within its uncertainty.** All dose bins include zero;
+  fixed effects and double ML scatter on either side of it.
+- **Robust to the usual checks:** thresholds of 32 and 35 °C, degree-days,
+  dropping 2016, the 2015–2017 drought or 2024, and year fixed effects
+  (+0.23%, p ≈ 0.08, the wrong sign for harm). The placebo, heat in the
+  season *after* harvest, shows nothing, as it must.
+- **But it is not proof that heat is harmless.** The lower bound, about
+  −0.5% per day, still allows a ~20% loss in a 46+ day season. Heat and
+  drought overlap (r ≈ −0.7), 75% of heat varies only between years (24
+  clusters), and NASA POWER's ~50 km grid blurs local temperature.
+
+**What it means for the tool.** Conilon's main climate risk in this data is
+**water**, not heat on its own: messages and protection advice should lead
+with drought (Proagro, Garantia-Safra, irrigation) and treat heat as a
+signal of drought. Plausible agronomically (conilon is a lowland robusta,
+more heat-tolerant than arabica, and often irrigated in northern ES), but to
+be confirmed with better data.
+
+**Next causal steps.** (1) The water-stress dose–response at flowering, with
+irrigated share as the source of heterogeneity (causal forest), needs Censo
+Agro / ANA irrigation data. (2) Finer temperature (ERA5-Land, ~9 km) to
+tighten the heat estimate. (3) Insurance uptake, with SISSER/SICOR data.
 
 ## Limitations
 
