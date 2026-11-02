@@ -1,0 +1,4 @@
+-r requirements.txt
+# CPU build; install with:
+#   pip install -r poc/requirements-cat.txt --extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0

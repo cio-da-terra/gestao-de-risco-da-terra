@@ -147,6 +147,82 @@ What changes because of them:
 - **Honest reporting.** Experiment 5 shows why the backtest must keep the
   publication lag, even though it makes the numbers worse.
 
+## Replicating the Climate-Adaptive Transformer (CAT)
+
+[`cat_model.py`](cat_model.py) rebuilds the architecture of Namdeo &
+Baraskar (2026) and [`cat.py`](cat.py) runs it as one more model in the same
+backtest, with the same conformal + ACI intervals:
+
+```bash
+.venv/bin/pip install -r poc/requirements-cat.txt --extra-index-url https://download.pytorch.org/whl/cpu
+.venv/bin/python -m poc.cat     # ~1.5 min on CPU → results/cat.md
+```
+
+| Paper | CAT-lite here |
+|---|---|
+| 12 months × 4 ERA5 variables | 12 months, Mar (Y-1) → Feb (Y) × tmax, tmin, rain, humidity (NASA POWER) |
+| Phenology-aware positional encoding (sinusoidal + learned + harmonics) | same |
+| Learnable phenology attention mask, initialised from crop physiology | same, initialised from conilon stages (growth, flowering, filling) |
+| 4 layers, d = 128, 8 heads | 1 layer, d = 16, 2 heads (4,638 parameters), 3-seed ensemble |
+| Cross-attention fusion with vegetation and static data, sigmoid gate | cross-attention with context tokens (ENSO, biennial lag, LSPA), sigmoid gate |
+| Huber loss, AdamW, OneCycleLR, early stopping | same; early stopping on the latest known year |
+| Split conformal + ACI | our online conformal + ACI |
+
+No vegetation stream: the paper's own NDVI/EVI/LAI were proxies derived from
+climate, so they add no information.
+
+**Result**, same 18 municipalities and years as above
+([`results/cat.md`](results/cat.md)):
+
+| Model | MAE (sacas/ha) | Coverage (ACI) | Mean width (sacas/ha) |
+|---|---|---|---|
+| Trend only | 9.1 | 77.8% | 36.7 |
+| Ridge | 8.9 | 77.4% | 32.7 |
+| Gradient boosting | **8.5** | 80.6% | 32.2 |
+| CAT-lite | 9.2 | 77.0% | 36.0 |
+
+![CAT attention](results/cat_attention.png)
+
+- **It doesn't beat the trend.** With ~430 rows (the paper had 7,182), even a
+  4.6k-parameter Transformer overfits; it is worst in the 2016 drought
+  (25 sacas/ha error).
+- **The learned phenology mask stays at its prior.** There isn't enough data
+  to move it, so the "learned" crop calendar is really the one we gave it.
+- **Its attention is still informative:** on 2025 forecasts it puts ~53% of
+  the weight on flowering (Jul–Oct), more than the prior, consistent with
+  rain at flowering being the most useful rain feature in ridge.
+- **Two implementation traps** worth knowing: a feature that is constant in
+  training (LSPA before 2011) must keep scale 1 or predictions explode, and
+  PyTorch's fused eval-mode attention returns NaN with a learned float mask
+  (fast path disabled in `cat_model.py`).
+
+**How it fits our run.** The paper's useful ideas are already in the
+pipeline in a form that suits our data size: stage-based climate windows
+(the phenology mask, as features), conformal intervals, ACI and a time-ordered
+split. The Transformer itself is not worth its cost at municipal scale with
+PAM. Keep it as a documented baseline, and revisit it if the data grows by
+an order of magnitude: farm-level yields from cooperatives, or many more
+regions and crops pooled together.
+
+## Next step: causal inference
+
+The models so far are **predictive**: they say what yield is likely, not what
+would change if a farmer acted. The tool's "Proteções" and adaptation advice
+need **causal** answers. Planned questions, from easiest to hardest:
+
+| Question | Treatment | Method | Data still needed |
+|---|---|---|---|
+| How much does water stress at flowering cut yield, and does irrigation protect against it? | Rain deficit Jul–Oct (continuous dose) | Double ML with municipality and year effects; causal forest for heterogeneity by irrigated share | Irrigated share per municipality (Censo Agro 2017, ANA Atlas Irrigação) |
+| How much does heat during grain filling cost? | Days ≥ 34 °C, Nov–Feb | Same, dose–response curve with its IC | none beyond the PoC |
+| Does insurance/Proagro uptake stabilise income? | Share of area insured (PSR) or under Proagro | Double ML / difference-in-differences across municipalities and years; selection is the main threat | MAPA SISSER policies, BCB SICOR (Proagro) by municipality |
+
+Why weather first: conditional on place and season, weather is as good as
+random, so its effects are identifiable with this panel; insurance uptake is
+chosen by farmers and needs a more careful design. Experiment 4's year shock
+means errors must be clustered by year in any causal estimate. Planned
+library: `DoubleML` or `econml` (Chernozhukov et al., 2018; Wager & Athey,
+2018 in the main README's references).
+
 ## Limitations
 
 - **PAM municipal yields are coarse:** values are often repeated across years

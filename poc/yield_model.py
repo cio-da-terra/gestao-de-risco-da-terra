@@ -132,12 +132,17 @@ def _fit_trend(known: pd.DataFrame):
 
 
 def backtest(df: pd.DataFrame, models: list[str] | None = None, lag: int = 2,
-             features: list[str] | None = None) -> tuple[pd.DataFrame, pd.Series]:
+             features: list[str] | None = None, factory=None,
+             on_fit=None) -> tuple[pd.DataFrame, pd.Series]:
     """Out-of-sample predictions (log scale) for every model and forecast year.
 
     lag: latest PAM year known at forecast time is Y - lag (2 = realistic,
     1 = the leaky setup used in experiment 5). features: subset for ablations.
+    factory: replaces make_models (e.g. to add CAT-lite). A model with a
+    `features` attribute gets those columns instead of `features`.
+    on_fit(name, model, Y, test): optional callback after each prediction.
     """
+    factory = factory or make_models
     features = features or FEATURES
     out = []
     ridge_coefs = None
@@ -159,16 +164,19 @@ def backtest(df: pd.DataFrame, models: list[str] | None = None, lag: int = 2,
         known["lag2_anom"] = lag2(known)
         test["lag2_anom"] = lag2(test)
         base = trend(test)
-        for name, model in make_models().items():
+        for name, model in factory().items():
             if models and name not in models:
                 continue
             if model is None:
                 pred = base
             else:
-                model.fit(known[features], known.anom)
-                pred = base + model.predict(test[features])
+                cols = getattr(model, "features", features)
+                model.fit(known[cols], known.anom)
+                pred = base + model.predict(test[cols])
                 if name == "ridge" and Y == df.year.max():
-                    ridge_coefs = pd.Series(model[-1].coef_, index=features)
+                    ridge_coefs = pd.Series(model[-1].coef_, index=cols)
+                if on_fit:
+                    on_fit(name, model, Y, test)
             out.append(pd.DataFrame({"model": name, "code": test.code.values,
                                      "year": Y, "y": test.y.values, "pred_log": pred}))
     return pd.concat(out, ignore_index=True), ridge_coefs
@@ -218,4 +226,5 @@ def summarise(res: pd.DataFrame) -> pd.DataFrame:
         "Coverage in 2016 (ACI)": r[r.year == 2016].groupby("model").cov_aci.mean() * 100,
     })
     order = ["trend", "ridge", "gbm", "mlp"]
+    order += [m for m in s.index if m not in order]     # e.g. "cat"
     return s.reindex([m for m in order if m in s.index]).round(1)
